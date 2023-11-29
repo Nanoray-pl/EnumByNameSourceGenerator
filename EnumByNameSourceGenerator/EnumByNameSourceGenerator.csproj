@@ -12,7 +12,7 @@
     <PackageTags>source generator; enum; by name</PackageTags>
     <Authors>Shockah</Authors>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>A source generator that generates by-name accessors for a given enum.</Description>
     <Copyright>Nanoray</Copyright>
