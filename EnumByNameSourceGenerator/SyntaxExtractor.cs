@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -41,16 +42,76 @@ internal static class SyntaxExtractor
             if (!IsCodeGenerationAttribute(item))
                 continue;
 
-            TypedConstant constructorArguments = item.ConstructorArguments[0];
-            if (constructorArguments.Kind == TypedConstantKind.Type && constructorArguments.Value is INamedTypeSymbol type)
-            {
-                IReadOnlyList<IFieldSymbol> members = type.GetMembers().OfType<IFieldSymbol>().ToArray();
-                EnumGeneration enumGen = new(accessType: AccessType.PUBLIC, name: type.Name, type.ContainingNamespace.ToDisplayString(), members: members, classDeclarationSyntax.GetLocation());
-                attributesForGeneration.Add(item: enumGen);
-            }
+            if (item.ConstructorArguments[0].Kind != TypedConstantKind.Type || item.ConstructorArguments[0].Value is not INamedTypeSymbol type)
+                continue;
+
+            EnumByNameParseStrategy parseStrategy = EnumByNameParseStrategy.DictionaryCache;
+            if (item.ConstructorArguments.Length >= 2 && item.ConstructorArguments[1].Kind == TypedConstantKind.Enum && item.ConstructorArguments[1].Value is int enumValue && Enum.IsDefined(typeof(EnumByNameParseStrategy), (EnumByNameParseStrategy)enumValue))
+                parseStrategy = (EnumByNameParseStrategy)enumValue;
+
+            IReadOnlyList<IFieldSymbol> members = type.GetMembers().OfType<IFieldSymbol>().ToArray();
+            IReadOnlyList<IFieldSymbol> uniqueMembers = UniqueMembers(members).ToArray();
+            EnumGeneration enumGen = new(accessType: AccessType.PUBLIC, name: type.Name, type.ContainingNamespace.ToDisplayString(), members: uniqueMembers, classDeclarationSyntax.GetLocation(), parseStrategy);
+            attributesForGeneration.Add(item: enumGen);
         }
 
         return attributesForGeneration;
+    }
+
+    private static IEnumerable<IFieldSymbol> UniqueMembers(IReadOnlyList<IFieldSymbol> members)
+    {
+        HashSet<string> names = UniqueEnumMemberNames(members);
+        foreach (IFieldSymbol member in members)
+        {
+            if (IsSkipEnumValue(member: member, names: names))
+                continue;
+            yield return member;
+        }
+    }
+
+    private static EnumMemberDeclarationSyntax? FindEnumMemberDeclarationSyntax(ISymbol member)
+    {
+        EnumMemberDeclarationSyntax? syntax = null;
+        foreach (SyntaxReference dsr in member.DeclaringSyntaxReferences)
+        {
+            syntax = GetSyntax(dsr);
+            if (syntax is not null)
+                break;
+        }
+        return syntax;
+    }
+
+    private static EnumMemberDeclarationSyntax? GetSyntax(SyntaxReference dsr)
+        => dsr.GetSyntax(CancellationToken.None) as EnumMemberDeclarationSyntax;
+
+    private static HashSet<string> UniqueEnumMemberNames(IReadOnlyList<IFieldSymbol> members)
+        => new(members.Select(m => m.Name).Distinct(StringComparer.Ordinal), comparer: StringComparer.Ordinal);
+
+    private static bool IsSkipEnumValue(IFieldSymbol member, HashSet<string> names)
+    {
+        EnumMemberDeclarationSyntax? syntax = FindEnumMemberDeclarationSyntax(member);
+        if (syntax?.EqualsValue is not null)
+        {
+            if (syntax.EqualsValue.Value.Kind() == SyntaxKind.IdentifierName)
+            {
+                bool found = names.Contains(syntax.EqualsValue.Value.ToString());
+                if (found)
+                {
+                    // note deliberately ignoring the return value here as we need to record the integer value as being skipped too
+                    IsSkipConstantValue(member: member, names: names);
+                    return true;
+                }
+            }
+        }
+        return IsSkipConstantValue(member: member, names: names);
+    }
+
+    private static bool IsSkipConstantValue(IFieldSymbol member, HashSet<string> names)
+    {
+        object? cv = member.ConstantValue;
+        if (cv is null)
+            return false;
+        return !names.Add(cv.ToString());
     }
 
     private static bool IsCodeGenerationAttribute(AttributeData item)

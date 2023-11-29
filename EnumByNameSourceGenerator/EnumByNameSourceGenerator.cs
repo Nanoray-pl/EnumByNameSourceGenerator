@@ -21,7 +21,7 @@ public class EnumByNameSourceGenerator : IIncrementalGenerator
                 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
                 public sealed class EnumByNameAttribute : Attribute
                 {
-                    public EnumByNameAttribute(Type enumType)
+                    public EnumByNameAttribute(Type enumType, EnumByNameParseStrategy strategy = EnumByNameParseStrategy.DictionaryCache)
                     {
                         this.Enum = enumType;
                         if (!enumType.IsEnum)
@@ -29,6 +29,11 @@ public class EnumByNameSourceGenerator : IIncrementalGenerator
                     }
 
                     public Type Enum { get; }
+                }
+
+                public enum EnumByNameParseStrategy
+                {
+                    AllOnce, EachTime, Lazy, DictionaryCache
                 }
             ";
             i.AddSource("EnumByNameAttribute.g.cs", attributeSource);

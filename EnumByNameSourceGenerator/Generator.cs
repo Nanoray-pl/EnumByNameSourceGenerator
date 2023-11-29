@@ -1,10 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Nanoray.EnumByNameSourceGenerator;
 
@@ -22,15 +18,13 @@ internal static class Generator
         using (source.StartBlock($"{ConvertAccessType(classDeclaration.AccessType)} static partial class {className}"))
         {
             Func<EnumGeneration, string> classNameFormatter = ClassWithNamespaceFormatter;
-            bool isFirst = true;
+            int index = 0;
             foreach (EnumGeneration attribute in classDeclaration.Enums)
             {
-                if (isFirst)
-                    isFirst = false;
-                else
+                if (index != 0)
                     source.AppendBlankLine();
-
-                GenerateAccessors(source, attribute, classNameFormatter);
+                GenerateAccessors(source, attribute, classNameFormatter, index);
+                index++;
             }
         }
         return className;
@@ -50,68 +44,56 @@ internal static class Generator
     private static string ClassWithNamespaceFormatter(EnumGeneration d)
         => d.Namespace == "<global namespace>" ? d.Name : $"{d.Namespace}.{d.Name}";
 
-    private static void GenerateAccessors(CodeBuilder source, in EnumGeneration attribute, Func<EnumGeneration, string> classNameFormatter)
+    private static void GenerateAccessors(CodeBuilder source, in EnumGeneration attribute, Func<EnumGeneration, string> classNameFormatter, int index)
     {
         string className = classNameFormatter(attribute);
-        foreach (string member in UniqueMembers(attribute).Select(member => member.Name))
-            source.AppendLine($"public static readonly {className} {member} = Enum.Parse<{className}>(\"{member}\");");
-    }
 
-    private static IEnumerable<IFieldSymbol> UniqueMembers(EnumGeneration enumDeclaration)
-    {
-        HashSet<string> names = UniqueEnumMemberNames(enumDeclaration);
-        foreach (IFieldSymbol member in enumDeclaration.Members)
+        switch (attribute.ParseStrategy)
         {
-            if (IsSkipEnumValue(member: member, names: names))
-                continue;
-            yield return member;
-        }
-    }
-
-    private static HashSet<string> UniqueEnumMemberNames(in EnumGeneration enumDeclaration)
-        => new(enumDeclaration.Members.Select(m => m.Name).Distinct(StringComparer.Ordinal), comparer: StringComparer.Ordinal);
-
-    private static bool IsSkipEnumValue(IFieldSymbol member, HashSet<string> names)
-    {
-        EnumMemberDeclarationSyntax? syntax = FindEnumMemberDeclarationSyntax(member);
-        if (syntax?.EqualsValue is not null)
-        {
-            if (syntax.EqualsValue.Value.Kind() == SyntaxKind.IdentifierName)
-            {
-                bool found = names.Contains(syntax.EqualsValue.Value.ToString());
-                if (found)
+            case EnumByNameParseStrategy.AllOnce:
                 {
-                    // note deliberately ignoring the return value here as we need to record the integer value as being skipped too
-                    IsSkipConstantValue(member: member, names: names);
-                    return true;
+                    foreach (string member in attribute.Members.Select(member => member.Name))
+                        source.AppendLine($"public static readonly {className} {member} = Enum.Parse<{className}>(\"{member}\");");
                 }
-            }
-        }
-        return IsSkipConstantValue(member: member, names: names);
-    }
+                break;
+            case EnumByNameParseStrategy.EachTime:
+                {
+                    foreach (string member in attribute.Members.Select(member => member.Name))
+                        source.AppendLine($"public static {className} {member} => Enum.Parse<{className}>(\"{member}\");");
+                }
+                break;
+            case EnumByNameParseStrategy.Lazy:
+                {
+                    foreach (string member in attribute.Members.Select(member => member.Name))
+                    {
+                        source.AppendLine($"private static readonly Lazy<{className}> __{member} = new Lazy<{className}>(() => Enum.Parse<{className}>(\"{member}\"));");
+                        source.AppendLine($"public static {className} {member} => __{member}.Value;");
+                    }
+                }
+                break;
+            case EnumByNameParseStrategy.DictionaryCache:
+                {
+                    source.AppendLine($@"
+                        private static readonly Dictionary<string, {className}> __cache{index} = new Dictionary<string, {className}>();
 
-    private static bool IsSkipConstantValue(IFieldSymbol member, HashSet<string> names)
-    {
-        object? cv = member.ConstantValue;
-        if (cv is null)
-            return false;
-        return !names.Add(cv.ToString());
-    }
+                        private static {className} __ObtainEnumValue{index}(string name)
+                        {{
+                            {className} enumValue;
+                            if (!__cache{index}.TryGetValue(name, out enumValue))
+                            {{
+                                enumValue = Enum.Parse<{className}>(name);
+                                __cache{index}[name] = enumValue;
+                            }}
+                            return enumValue;
+                        }}
+                    ");
 
-    private static EnumMemberDeclarationSyntax? FindEnumMemberDeclarationSyntax(ISymbol member)
-    {
-        EnumMemberDeclarationSyntax? syntax = null;
-        foreach (SyntaxReference dsr in member.DeclaringSyntaxReferences)
-        {
-            syntax = GetSyntax(dsr);
-            if (syntax is not null)
+                    foreach (string member in attribute.Members.Select(member => member.Name))
+                        source.AppendLine($"public static {className} {member} => __ObtainEnumValue{index}(\"{member}\");");
+                }
                 break;
         }
-        return syntax;
     }
-
-    private static EnumMemberDeclarationSyntax? GetSyntax(SyntaxReference dsr)
-        => dsr.GetSyntax(CancellationToken.None) as EnumMemberDeclarationSyntax;
 
     private static string ConvertAccessType(AccessType accessType)
         => accessType switch
