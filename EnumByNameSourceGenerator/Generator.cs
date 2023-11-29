@@ -37,7 +37,7 @@ internal static class Generator
     }
 
     private static CodeBuilder AddUsingDeclarations(CodeBuilder source)
-        => AddUsingDeclarations(source: source, "System.CodeDom.Compiler");
+        => AddUsingDeclarations(source: source, "System", "System.CodeDom.Compiler");
 
     private static CodeBuilder AddUsingDeclarations(CodeBuilder source, params string[] namespaces)
     {
