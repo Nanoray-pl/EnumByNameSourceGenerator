@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -16,27 +15,27 @@ internal static class SyntaxExtractor
         if (!classDeclarationSyntax.Modifiers.Any(SyntaxKind.PartialKeyword))
             return null;
 
-        AccessType accessType = classDeclarationSyntax.GetAccessType();
+        var accessType = classDeclarationSyntax.GetAccessType();
         if (accessType == AccessType.PRIVATE)
             return null;
 
-        IReadOnlyList<EnumGeneration> attributesForGeneration = GetEnumsToGenerateForClass(context: context, classDeclarationSyntax: classDeclarationSyntax, cancellationToken: cancellationToken);
+        var attributesForGeneration = GetEnumsToGenerateForClass(context: context, classDeclarationSyntax: classDeclarationSyntax, cancellationToken: cancellationToken);
         if (attributesForGeneration.Count == 0)
             return null;
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        INamedTypeSymbol classSymbol = (INamedTypeSymbol)context.SemanticModel.GetDeclaredSymbol(declaration: classDeclarationSyntax, cancellationToken: CancellationToken.None)!;
+        var classSymbol = (INamedTypeSymbol)context.SemanticModel.GetDeclaredSymbol(declaration: classDeclarationSyntax, cancellationToken: CancellationToken.None)!;
         return new(accessType: accessType, name: classSymbol.Name, classSymbol.ContainingNamespace.ToDisplayString(), enums: attributesForGeneration, classDeclarationSyntax.GetLocation());
     }
 
     private static IReadOnlyList<EnumGeneration> GetEnumsToGenerateForClass(in GeneratorSyntaxContext context, ClassDeclarationSyntax classDeclarationSyntax, CancellationToken cancellationToken)
     {
-        List<EnumGeneration> attributesForGeneration = new();
-        INamedTypeSymbol classSymbol = (INamedTypeSymbol)context.SemanticModel.GetDeclaredSymbol(declaration: classDeclarationSyntax, cancellationToken: cancellationToken)!;
-        ImmutableArray<AttributeData> attributes = classSymbol.GetAttributes();
+        List<EnumGeneration> attributesForGeneration = [];
+        var classSymbol = (INamedTypeSymbol)context.SemanticModel.GetDeclaredSymbol(declaration: classDeclarationSyntax, cancellationToken: cancellationToken)!;
+        var attributes = classSymbol.GetAttributes();
 
-        foreach (AttributeData? item in attributes)
+        foreach (var item in attributes)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!IsCodeGenerationAttribute(item))
@@ -45,7 +44,7 @@ internal static class SyntaxExtractor
             if (item.ConstructorArguments[0].Kind != TypedConstantKind.Type || item.ConstructorArguments[0].Value is not INamedTypeSymbol type)
                 continue;
 
-            EnumByNameParseStrategy parseStrategy = EnumByNameParseStrategy.DictionaryCache;
+            var parseStrategy = EnumByNameParseStrategy.DictionaryCache;
             if (item.ConstructorArguments.Length >= 2 && item.ConstructorArguments[1].Kind == TypedConstantKind.Enum && item.ConstructorArguments[1].Value is int enumValue && Enum.IsDefined(typeof(EnumByNameParseStrategy), (EnumByNameParseStrategy)enumValue))
                 parseStrategy = (EnumByNameParseStrategy)enumValue;
 
@@ -60,8 +59,8 @@ internal static class SyntaxExtractor
 
     private static IEnumerable<IFieldSymbol> UniqueMembers(IReadOnlyList<IFieldSymbol> members)
     {
-        HashSet<string> names = UniqueEnumMemberNames(members);
-        foreach (IFieldSymbol member in members)
+        var names = UniqueEnumMemberNames(members);
+        foreach (var member in members)
         {
             if (IsSkipEnumValue(member: member, names: names))
                 continue;
@@ -72,7 +71,7 @@ internal static class SyntaxExtractor
     private static EnumMemberDeclarationSyntax? FindEnumMemberDeclarationSyntax(ISymbol member)
     {
         EnumMemberDeclarationSyntax? syntax = null;
-        foreach (SyntaxReference dsr in member.DeclaringSyntaxReferences)
+        foreach (var dsr in member.DeclaringSyntaxReferences)
         {
             syntax = GetSyntax(dsr);
             if (syntax is not null)
@@ -89,7 +88,7 @@ internal static class SyntaxExtractor
 
     private static bool IsSkipEnumValue(IFieldSymbol member, HashSet<string> names)
     {
-        EnumMemberDeclarationSyntax? syntax = FindEnumMemberDeclarationSyntax(member);
+        var syntax = FindEnumMemberDeclarationSyntax(member);
         if (syntax?.EqualsValue is not null)
         {
             if (syntax.EqualsValue.Value.Kind() == SyntaxKind.IdentifierName)

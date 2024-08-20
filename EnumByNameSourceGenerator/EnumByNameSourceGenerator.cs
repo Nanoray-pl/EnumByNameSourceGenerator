@@ -13,29 +13,29 @@ public class EnumByNameSourceGenerator : IIncrementalGenerator
 
         context.RegisterPostInitializationOutput(i =>
         {
-            string attributeSource = @"
-                using System;
+            string attributeSource = """
+                    using System;
 
-                namespace Nanoray.EnumByNameSourceGenerator;
+                    namespace Nanoray.EnumByNameSourceGenerator;
 
-                [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-                public sealed class EnumByNameAttribute : Attribute
-                {
-                    public EnumByNameAttribute(Type enumType, EnumByNameParseStrategy strategy = EnumByNameParseStrategy.DictionaryCache)
+                    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
+                    internal sealed class EnumByNameAttribute : Attribute
                     {
-                        this.Enum = enumType;
-                        if (!enumType.IsEnum)
-                            throw new ArgumentException(message: ""The type must be an enum."", nameof(enumType));
+                        public EnumByNameAttribute(Type enumType, EnumByNameParseStrategy strategy = EnumByNameParseStrategy.DictionaryCache)
+                        {
+                            this.Enum = enumType;
+                            if (!enumType.IsEnum)
+                                throw new ArgumentException(message: "The type must be an enum.", nameof(enumType));
+                        }
+
+                        public Type Enum { get; }
                     }
 
-                    public Type Enum { get; }
-                }
-
-                public enum EnumByNameParseStrategy
-                {
-                    AllOnce, EachTime, Lazy, DictionaryCache
-                }
-            ";
+                    internal enum EnumByNameParseStrategy
+                    {
+                        AllOnce, EachTime, Lazy, DictionaryCache
+                    }
+                """;
             i.AddSource("EnumByNameAttribute.g.cs", attributeSource);
         });
     }
@@ -53,7 +53,7 @@ public class EnumByNameSourceGenerator : IIncrementalGenerator
         if (classEnumGeneration is null)
             return;
 
-        string className = Generator.GenerateClassForClass(classDeclaration: classEnumGeneration.Value, out CodeBuilder? codeBuilder);
+        string className = Generator.GenerateClassForClass(classDeclaration: classEnumGeneration.Value, out var codeBuilder);
         sourceProductionContext.AddSource(classEnumGeneration.Value.Namespace + "." + className + ".generated.cs", sourceText: codeBuilder.Text);
     }
 }

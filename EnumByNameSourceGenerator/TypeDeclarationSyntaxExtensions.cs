@@ -18,30 +18,18 @@ public static class TypeDeclarationSyntaxExtensions
 
     private static AccessType GetAccessType(in SyntaxTokenList modifiers)
     {
-        bool isPublic = modifiers.Any(SyntaxKind.PublicKeyword);
-
-        if (isPublic)
-        {
+        if (modifiers.Any(SyntaxKind.PublicKeyword))
             return AccessType.PUBLIC;
-        }
-
-        bool isPrivate = modifiers.Any(SyntaxKind.PrivateKeyword);
-
-        if (isPrivate)
-        {
+        if (modifiers.Any(SyntaxKind.PrivateKeyword))
             return AccessType.PRIVATE;
-        }
 
         bool isInternal = modifiers.Any(SyntaxKind.InternalKeyword);
-
         bool isProtected = modifiers.Any(SyntaxKind.ProtectedKeyword);
 
         if (isProtected)
-        {
             return isInternal
                 ? AccessType.PROTECTED_INTERNAL
                 : AccessType.PROTECTED;
-        }
 
         return AccessType.INTERNAL;
     }

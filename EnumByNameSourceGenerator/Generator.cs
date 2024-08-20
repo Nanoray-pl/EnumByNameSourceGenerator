@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using Microsoft.CodeAnalysis;
 
 namespace Nanoray.EnumByNameSourceGenerator;
 
@@ -17,9 +16,9 @@ internal static class Generator
 
         using (source.StartBlock($"{ConvertAccessType(classDeclaration.AccessType)} static partial class {className}"))
         {
-            Func<EnumGeneration, string> classNameFormatter = ClassWithNamespaceFormatter;
+            var classNameFormatter = ClassWithNamespaceFormatter;
             int index = 0;
-            foreach (EnumGeneration attribute in classDeclaration.Enums)
+            foreach (var attribute in classDeclaration.Enums)
             {
                 if (index != 0)
                     source.AppendBlankLine();
@@ -92,6 +91,8 @@ internal static class Generator
                         source.AppendLine($"public static {className} {member} => __ObtainEnumValue{index}(\"{member}\");");
                 }
                 break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
